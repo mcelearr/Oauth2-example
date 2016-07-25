@@ -2,6 +2,7 @@ require('env2')('config.env');
 const Hapi = require('hapi');
 const Inert = require('inert');
 const querystring = require('querystring');
+const httpsRequest = require('./https-request.js');
 
 const server = new Hapi.Server();
 const port = process.env.PORT;
@@ -9,7 +10,6 @@ server.connection({ port: port });
 
 server.register(Inert, err => {
   if (err) throw err;
-
   server.route([{
     method: 'GET',
     path: '/{params*}',
@@ -29,6 +29,34 @@ server.register(Inert, err => {
       });
       reply.redirect('https://github.com/login/oauth/authorize?' + loginQueryString);
     },
+  },
+  { method: 'GET',
+    path: '/welcome',
+    handler: (request, reply) => {
+      const authToken = request.query.code;
+      const payload = querystring.stringify({
+        client_id: process.env.GITHUB_CLIENT_ID,
+        client_secret: process.env.GITHUB_CLIENT_SECRET,
+        code: authToken,
+      });
+      const optionsObject = {
+        headers: {
+          'Accept'         : 'application/json',
+          'Content-Type'   : 'application/x-www-form-urlencoded',
+          'Content-Length' : payload.length,
+        },
+        body: payload,
+        hostname: 'github.com',
+        port: 443,
+        path: '/login/oauth/access_token',
+        method: 'POST',
+      };
+
+      httpsRequest(optionsObject, (err, response) => {
+        console.log(err || response);
+        reply(err || response);
+      })
+    }
   }]);
 });
 
